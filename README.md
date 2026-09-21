@@ -72,11 +72,26 @@ Google Ads logo dimensions return **1**.
 | `locale` | no | none | `IN` or `en-IN`. Also accepted as `country`. |
 | `variations` | no | `3` (logos: `1`) | 1 to 3. |
 | `quality` | no | `low` | `low` · `medium` · `high` · `auto` |
-| `visual_profile` | no | — | A block of text describing how this client's own images look. Appended to the prompt, so generated images match their style. See [Matching a client's look](#12-matching-a-clients-look). |
-| `shot_types` | no | — | List of strings, the framings this client actually uses. One is given to each variation, so three images differ in framing instead of repeating. |
-| `reference_image_urls` | no | — | List of `http(s)` image URLs, max 8. Attached to every generation. Switches the call from `images.generate` to `images.edit`. |
-| `reference_kind` | no | `photographs` | `photographs` · `visual_board`. Says what the references **are** — a board needs different instructions from a set of photographs. |
+| `reference_image_urls` | no | — | **The visual board's URL.** It is a list, but send **one** — the board. See [Matching a client's look](#12-matching-a-clients-look). |
+| `reference_kind` | no | `photographs` | Send **`visual_board`** whenever you send a board. Without it the board is treated as a photograph to copy. |
 | `size` | no | — | Legacy. A raw `1024x1024` / `1024x1536` / `1536x1024` / `auto`, **`generic` only**. New integrations should use `dimension`. |
+
+**To match a client's look, send two fields: the board's URL and
+`reference_kind: "visual_board"`.** That is the whole of it, and it is what every
+end-to-end test was run with.
+
+```jsonc
+{ "input_text": "Today we are installing a new EPDM roof on a flat commercial roof...",
+  "image_type": "meta", "dimension": "meta_square", "locale": "en-US",
+  "reference_image_urls": ["https://your-bucket/boards/acme.png"],
+  "reference_kind": "visual_board" }
+```
+
+The endpoint also accepts `visual_profile`, `shot_types`, and up to 8 reference
+photographs instead of a board. None of those are part of this flow and none were
+exercised in testing — they are described at the end of
+[section 12](#12-matching-a-clients-look) so nobody has to guess what they do, but you
+do not need them.
 
 **`brand_kit` is never required.** It is an alternative input that only the two
 website hero dimensions accept:
@@ -559,16 +574,23 @@ transparent PNG.
 
 ## 12. Matching a client's look
 
-Three optional fields work together to make generated images resemble a client's own
-photography. All three are independent — send none, some or all.
+**Send the board. Two fields.**
 
-| Field | What it carries |
-|---|---|
-| `visual_profile` | text: palette, light, camera, wardrobe, finish |
-| `shot_types` | the framings this client actually uses, one per variation |
-| `reference_image_urls` + `reference_kind` | actual images, attached to every call |
+```jsonc
+{ "reference_image_urls": ["https://your-bucket/boards/acme.png"],
+  "reference_kind": "visual_board" }
+```
 
-The companion **Visual Profile API** produces all three from a client's media library.
+The board is one PNG produced by the companion **Visual Profile API** from that
+client's media library: their own photographs, colour swatches measured from the
+pixels, and written notes on how their photography looks. Build it once per business,
+host it, and send the same URL with every image you generate for them.
+
+`reference_kind: "visual_board"` is not optional in practice. Without it the service
+treats the board as a photograph to match, and the likely result is a collage with
+lettering in it. With it, the service adds rules telling the model to **read** the
+board rather than imitate it, and that no grid, panel, swatch or text may reach the
+image.
 
 ### The rule that matters
 
@@ -585,30 +607,6 @@ usual subject.
 So **name the setting in `input_text`** when it is not the client's usual one — "inside
 the roof space", "at the counter", "in the workshop". Copy that only implies the
 setting may not be enough.
-
-### `reference_kind`
-
-Say what the references are; the service cannot tell by looking and will not guess.
-
-**`photographs`** (the default) — a handful of the client's own photographs, used as
-style anchors.
-
-**`visual_board`** — one image that is a *document about* photographs: a grid of
-samples with colour swatches, category headings and bullet lists. This needs different
-instructions, because the obvious reading of "match this reference" is a collage with
-lettering in it. With `visual_board` the service adds rules that tell the model to
-**read** the board rather than imitate it, and that no grid, panel, swatch or text may
-reach the image.
-
-```jsonc
-{ "input_text": "Full strip and re-roof finished Thursday...",
-  "image_type": "meta", "dimension": "meta_square", "locale": "en-US",
-  "visual_profile": "VISUAL PROFILE — how this business's photographs are TAKEN...",
-  "shot_types": ["wide environmental · elevated · people small in frame",
-                 "close detail · eye level · hands only"],
-  "reference_image_urls": ["https://example.com/visual-board.png"],
-  "reference_kind": "visual_board" }
-```
 
 ### What references cost
 
@@ -645,5 +643,25 @@ Quality changes the output tokens, not the input — measured on this service: `
 why the choice of image model stops mattering: flare and gpt-image-2 landed within half
 a second of each other when 16 references were attached.
 
-**Logos ignore all three fields.** A logo is a graphic; there is no photography in it
-to match.
+**Logos ignore all of this.** A logo is a graphic; there is no photography in it to
+match, so references, `visual_profile` and `shot_types` are all dropped for the two
+Google Ads logo dimensions.
+
+---
+
+### Also accepted — not part of this flow
+
+These three are implemented and validated, and a request carrying them will behave as
+described. **None of them were used in any of the end-to-end tests**, and you do not
+need them to match a client's look. They are documented so that nobody sending one has
+to guess what it does.
+
+| Field | What it does |
+|---|---|
+| `visual_profile` | A block of text describing how the client's images look — palette, light, camera, wardrobe, finish. Appended to the prompt. The Visual Profile API returns one as `profile_text`, as an alternative to hosting a board. |
+| `shot_types` | A list of framings the client uses. One is handed to each variation, so several variations differ in framing as well as in creative angle. Without it the variations differ by angle alone. |
+| `reference_kind: "photographs"` | Attaches the client's own photographs instead of a board, up to 8. Every one is re-uploaded on every variation — see the cost table above, where 8 photographs cost more than three times what a board costs, for a looser match. |
+
+A board carries the same information as a folder of photographs in one image, so
+`visual_board` with a single URL is both the cheapest and the closest option. That is
+why it is the one the flow uses.
