@@ -73,12 +73,12 @@ Google Ads logo dimensions return **1**.
 | `variations` | no | `3` (logos: `1`) | 1 to 3. |
 | `quality` | no | `low` | `low` · `medium` · `high` · `auto` |
 | `reference_image_urls` | no | — | **The visual board's URL.** It is a list, but send **one** — the board. See [Matching a client's look](#12-matching-a-clients-look). |
-| `reference_kind` | no | `photographs` | Send **`visual_board`** whenever you send a board. Without it the board is treated as a photograph to copy. |
+| `reference_kind` | no | `visual_board` | Already correct for a board, so you can leave it out. Send `photographs` only if you are attaching plain photos instead. |
 | `size` | no | — | Legacy. A raw `1024x1024` / `1024x1536` / `1536x1024` / `auto`, **`generic` only**. New integrations should use `dimension`. |
 
-**To match a client's look, send two fields: the board's URL and
-`reference_kind: "visual_board"`.** That is the whole of it, and it is what every
-end-to-end test was run with.
+**To match a client's look, send the board's URL.** `reference_kind` already defaults
+to `visual_board`, so that one field is enough. The example below sends it explicitly
+because it reads better in a request you are about to copy.
 
 ```jsonc
 { "input_text": "Today we are installing a new EPDM roof on a flat commercial roof...",
@@ -586,11 +586,13 @@ client's media library: their own photographs, colour swatches measured from the
 pixels, and written notes on how their photography looks. Build it once per business,
 host it, and send the same URL with every image you generate for them.
 
-`reference_kind: "visual_board"` is not optional in practice. Without it the service
-treats the board as a photograph to match, and the likely result is a collage with
-lettering in it. With it, the service adds rules telling the model to **read** the
-board rather than imitate it, and that no grid, panel, swatch or text may reach the
-image.
+`reference_kind` **defaults to `visual_board`**, so a request that attaches a board
+and says nothing gets the board handling: rules telling the model to **read** the board
+rather than imitate it, and that no grid, panel, swatch or text may reach the image.
+Sending the field explicitly is still clearer, and costs nothing.
+
+The one thing to know: if you ever attach plain photographs instead of a board, you
+must say `"reference_kind": "photographs"`. Left out, they are treated as a board.
 
 ### The rule that matters
 
